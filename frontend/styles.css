@@ -117,6 +117,7 @@
             <input name="date_end" type="number" placeholder="End year" />
             <input name="status" placeholder="Status" value="ingested" />
             <textarea name="summary" rows="3" placeholder="Summary"></textarea>
+            <textarea name="body_text" rows="3" placeholder="Document text body"></textarea>
           </div>
           <button type="submit">Save document</button>
         </form>

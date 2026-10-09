@@ -40,6 +40,25 @@ def get_connection() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def ensure_document_columns(conn) -> None:
+    if is_postgres():
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = 'documents'"
+            )
+            columns = {row[0] for row in cur.fetchall()}
+            if "body_text" not in columns:
+                cur.execute("ALTER TABLE documents ADD COLUMN body_text TEXT")
+        conn.commit()
+        return
+
+    cols = conn.execute("PRAGMA table_info(documents)").fetchall()
+    existing = {row[1] for row in cols}
+    if "body_text" not in existing:
+        conn.execute("ALTER TABLE documents ADD COLUMN body_text TEXT")
+    conn.commit()
+
+
 def init_db() -> None:
     if is_postgres():
         with psycopg2.connect(DB_URL, cursor_factory=RealDictCursor) as conn:
@@ -58,6 +77,7 @@ def init_db() -> None:
                         date_start INTEGER,
                         date_end INTEGER,
                         summary TEXT,
+                        body_text TEXT,
                         status TEXT DEFAULT 'ingested',
                         created_at TIMESTAMPTZ DEFAULT NOW()
                     )
@@ -77,6 +97,7 @@ def init_db() -> None:
                     )
                     """
                 )
+                ensure_document_columns(conn)
                 conn.commit()
         return
 
@@ -96,6 +117,7 @@ def init_db() -> None:
             date_start INTEGER,
             date_end INTEGER,
             summary TEXT,
+            body_text TEXT,
             status TEXT DEFAULT 'ingested',
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
@@ -115,6 +137,7 @@ def init_db() -> None:
         )
         """
     )
+    ensure_document_columns(conn)
     conn.commit()
     conn.close()
 
@@ -138,6 +161,7 @@ def seed_documents() -> None:
                         "date_start": -1200,
                         "date_end": -900,
                         "summary": "Early Vedic hymn collection preserving ritual and cosmological themes.",
+                        "body_text": "The hymns praise the cosmic order, ritual sacrifice, and the divine powers associated with the sky and sacrifice.",
                         "status": "downloaded",
                     },
                     {
@@ -151,6 +175,7 @@ def seed_documents() -> None:
                         "date_start": -1000,
                         "date_end": -400,
                         "summary": "Foundational narrative of creation, covenant, and early ancestral history.",
+                        "body_text": "In the beginning God created the heavens and the earth. The narrative traces covenant, ancestry, and divine promise.",
                         "status": "downloaded",
                     },
                     {
@@ -164,6 +189,7 @@ def seed_documents() -> None:
                         "date_start": 50,
                         "date_end": 110,
                         "summary": "Narrative of Jesus focusing on teaching, fulfillment, and kingdom themes.",
+                        "body_text": "The genealogy and teaching of Jesus emphasize fulfillment of prophecy, the kingdom of heaven, and the authority of the master teacher.",
                         "status": "downloaded",
                     },
                     {
@@ -177,14 +203,15 @@ def seed_documents() -> None:
                         "date_start": 610,
                         "date_end": 632,
                         "summary": "Early revelation units forming the opening surahs.",
+                        "body_text": "The opening supplication, praise of God, and the guidance of the straight path structure the early revelation and its ethical orientation.",
                         "status": "downloaded",
                     },
                 ]
                 for item in sample_documents:
                     cur.execute(
                         """
-                        INSERT INTO documents (title, religion, tradition, language, source, source_url, category, date_start, date_end, summary, status)
-                        VALUES (%(title)s, %(religion)s, %(tradition)s, %(language)s, %(source)s, %(source_url)s, %(category)s, %(date_start)s, %(date_end)s, %(summary)s, %(status)s)
+                        INSERT INTO documents (title, religion, tradition, language, source, source_url, category, date_start, date_end, summary, body_text, status)
+                        VALUES (%(title)s, %(religion)s, %(tradition)s, %(language)s, %(source)s, %(source_url)s, %(category)s, %(date_start)s, %(date_end)s, %(summary)s, %(body_text)s, %(status)s)
                         """,
                         item,
                     )
@@ -210,6 +237,7 @@ def seed_documents() -> None:
             "date_start": -1200,
             "date_end": -900,
             "summary": "Early Vedic hymn collection preserving ritual and cosmological themes.",
+            "body_text": "The hymns praise the cosmic order, ritual sacrifice, and the divine powers associated with the sky and sacrifice.",
             "status": "downloaded",
         },
         {
@@ -223,6 +251,7 @@ def seed_documents() -> None:
             "date_start": -1000,
             "date_end": -400,
             "summary": "Foundational narrative of creation, covenant, and early ancestral history.",
+            "body_text": "In the beginning God created the heavens and the earth. The narrative traces covenant, ancestry, and divine promise.",
             "status": "downloaded",
         },
         {
@@ -236,6 +265,7 @@ def seed_documents() -> None:
             "date_start": 50,
             "date_end": 110,
             "summary": "Narrative of Jesus focusing on teaching, fulfillment, and kingdom themes.",
+            "body_text": "The genealogy and teaching of Jesus emphasize fulfillment of prophecy, the kingdom of heaven, and the authority of the master teacher.",
             "status": "downloaded",
         },
         {
@@ -249,6 +279,7 @@ def seed_documents() -> None:
             "date_start": 610,
             "date_end": 632,
             "summary": "Early revelation units forming the opening surahs.",
+            "body_text": "The opening supplication, praise of God, and the guidance of the straight path structure the early revelation and its ethical orientation.",
             "status": "downloaded",
         },
     ]
@@ -256,9 +287,9 @@ def seed_documents() -> None:
         """
         INSERT INTO documents (
             title, religion, tradition, language, source, source_url, category,
-            date_start, date_end, summary, status
+            date_start, date_end, summary, body_text, status
         ) VALUES (:title, :religion, :tradition, :language, :source, :source_url,
-            :category, :date_start, :date_end, :summary, :status)
+            :category, :date_start, :date_end, :summary, :body_text, :status)
         """,
         sample_documents,
     )

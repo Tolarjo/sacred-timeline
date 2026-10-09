@@ -283,6 +283,19 @@ button {
   margin: 0 0 10px;
 }
 
+.document-text {
+  margin-top: 18px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 12px;
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  color: var(--text);
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

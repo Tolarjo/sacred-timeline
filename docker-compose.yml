@@ -133,6 +133,7 @@ async function renderSelectedDocument() {
     return;
   }
 
+  const bodyText = doc.body_text ? String(doc.body_text).slice(0, 3000) : 'No extracted text yet.';
   container.classList.remove('empty-state');
   container.innerHTML = `
     <div class="detail-card">
@@ -145,6 +146,10 @@ async function renderSelectedDocument() {
         <div><strong>Date range</strong><br />${formatRange(doc)}</div>
         <div><strong>Status</strong><br />${doc.status || 'ingested'}</div>
       </div>
+      <div style="margin-top: 16px;">
+        <button data-action="extract-text" data-id="${doc.id}">Extract text</button>
+      </div>
+      <div class="document-text">${bodyText}</div>
     </div>
   `;
 }
@@ -213,6 +218,21 @@ async function loadDashboard() {
   renderDocuments();
 }
 
+async function extractTextForSelectedDocument(documentId) {
+  const response = await fetch(`${apiBase}/documents/${documentId}/extract-text`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    return;
+  }
+  const result = await response.json();
+  const docIndex = state.documents.findIndex((doc) => doc.id === documentId);
+  if (docIndex >= 0) {
+    state.documents[docIndex].body_text = result.document.body_text;
+  }
+  renderSelectedDocument();
+}
+
 async function submitSource(event) {
   event.preventDefault();
   const form = event.target;
@@ -268,6 +288,12 @@ document.getElementById('documentList').addEventListener('click', (event) => {
     }
     renderComparison();
   }
+});
+
+document.getElementById('selectedDocument').addEventListener('click', async (event) => {
+  const button = event.target.closest('button');
+  if (!button || button.dataset.action !== 'extract-text') return;
+  await extractTextForSelectedDocument(Number(button.dataset.id));
 });
 
 document.getElementById('sourceForm').addEventListener('submit', submitSource);
