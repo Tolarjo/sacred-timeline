@@ -10,9 +10,11 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">Global manuscript library</p>
-        <h1>Sacred Timeline MVP</h1>
+        <h1>Sacred Timeline</h1>
       </div>
-      <button id="refreshBtn">Refresh data</button>
+      <div class="topbar-actions">
+        <button id="refreshBtn">Refresh data</button>
+      </div>
     </header>
 
     <main class="layout">
@@ -37,12 +39,16 @@
 
       <section class="content-grid">
         <div class="panel">
-          <h2>Timeline</h2>
+          <div class="panel-heading">
+            <h2>Chronology</h2>
+          </div>
           <div id="timeline" class="timeline"></div>
         </div>
 
         <div class="panel">
-          <h2>Religion breakdown</h2>
+          <div class="panel-heading">
+            <h2>Religion breakdown</h2>
+          </div>
           <div id="religionBreakdown" class="breakdown-list"></div>
         </div>
       </section>
@@ -56,7 +62,23 @@
       </section>
 
       <section class="panel form-panel">
-        <h2>Add a document</h2>
+        <div class="panel-heading">
+          <h2>Ingest a source</h2>
+        </div>
+        <form id="sourceForm" class="ingest-form">
+          <div class="form-grid">
+            <input name="source_url" placeholder="Source URL" required />
+            <input name="religion" placeholder="Religion" />
+            <input name="source_name" placeholder="Source name" />
+          </div>
+          <button type="submit">Queue source</button>
+        </form>
+      </section>
+
+      <section class="panel form-panel">
+        <div class="panel-heading">
+          <h2>Add a document manually</h2>
+        </div>
         <form id="documentForm">
           <div class="form-grid">
             <input name="title" placeholder="Document title" required />

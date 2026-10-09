@@ -1,138 +1,71 @@
-import sqlite3
-from pathlib import Path
+import json
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "sacred_timeline.db"
-DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-
-def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+import httpx
+from bs4 import BeautifulSoup
 
 
-def init_db():
-    conn = get_connection()
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS documents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            religion TEXT NOT NULL,
-            tradition TEXT,
-            language TEXT,
-            source TEXT,
-            source_url TEXT,
-            category TEXT,
-            date_start INTEGER,
-            date_end INTEGER,
-            summary TEXT,
-            status TEXT DEFAULT 'ingested',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    conn.commit()
-    conn.close()
+def infer_source_type(url: str) -> str:
+    domain = urlparse(url).netloc.lower()
+    if "sefaria" in domain:
+        return "sefaria"
+    if "openiti" in domain:
+        return "openiti"
+    if "archive.org" in domain or "archive" in domain:
+        return "archive"
+    if "books.google" in domain or "google" in domain:
+        return "google_books"
+    return "generic"
 
 
-def seed_documents():
-    conn = get_connection()
-    existing = conn.execute("SELECT COUNT(*) AS count FROM documents").fetchone()["count"]
-    if existing > 0:
-        conn.close()
-        return
+def metadata_from_html(html: str, url: str) -> Dict[str, Any]:
+    soup = BeautifulSoup(html, "html.parser")
+    title = soup.title.get_text(strip=True) if soup.title else "Untitled source"
+    description_tag = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "og:description"})
+    description = description_tag.get("content", "") if description_tag else ""
+    return {
+        "title": title,
+        "description": description,
+        "url": url,
+    }
 
-    sample_documents = [
-        {
-            "title": "Rigveda, Book 10",
-            "religion": "Hinduism",
-            "tradition": "Vedic",
-            "language": "Sanskrit",
-            "source": "Internet Archive",
-            "source_url": "https://example.org/rigveda-book-10",
-            "category": "Scripture",
-            "date_start": -1200,
-            "date_end": -900,
-            "summary": "Early Vedic hymn collection preserving ritual and cosmological themes.",
-            "status": "downloaded",
-        },
-        {
-            "title": "Torah: Genesis",
-            "religion": "Judaism",
-            "tradition": "Hebrew Bible",
-            "language": "Hebrew",
-            "source": "Sefaria",
-            "source_url": "https://example.org/torah-genesis",
-            "category": "Canonical text",
-            "date_start": -1000,
-            "date_end": -400,
-            "summary": "Foundational narrative of creation, covenant, and early ancestral history.",
-            "status": "downloaded",
-        },
-        {
-            "title": "Psalms, Book I",
-            "religion": "Judaism",
-            "tradition": "Hebrew Bible",
-            "language": "Hebrew",
-            "source": "Project Ben-Yehuda",
-            "source_url": "https://example.org/psalms-book-i",
-            "category": "Poetry",
-            "date_start": -1000,
-            "date_end": -300,
-            "summary": "Liturgical hymns and devotional poetry with broad theological themes.",
-            "status": "indexed",
-        },
-        {
-            "title": "Gospel of Matthew",
-            "religion": "Christianity",
-            "tradition": "Synoptic",
-            "language": "Greek",
-            "source": "Early Christian Manuscript Archive",
-            "source_url": "https://example.org/gospel-of-matthew",
-            "category": "Canonical text",
-            "date_start": 50,
-            "date_end": 110,
-            "summary": "Narrative of Jesus with emphasis on teaching, fulfillment, and kingdom themes.",
-            "status": "downloaded",
-        },
-        {
-            "title": "Quran, Surah 1-10",
-            "religion": "Islam",
-            "tradition": "Quranic",
-            "language": "Arabic",
-            "source": "OpenITI",
-            "source_url": "https://example.org/quran-surah-1-10",
-            "category": "Canonical text",
-            "date_start": 610,
-            "date_end": 632,
-            "summary": "Early revelation manuscripts and recitation units forming the opening surahs.",
-            "status": "downloaded",
-        },
-        {
-            "title": "Dhammapada",
-            "religion": "Buddhism",
-            "tradition": "Theravada",
-            "language": "Pali",
-            "source": "Buddhist Digital Archive",
-            "source_url": "https://example.org/dhammapada",
-            "category": "Ethical aphorisms",
-            "date_start": -400,
-            "date_end": 200,
-            "summary": "Teaching verses on ethics, mindfulness, and the path to liberation.",
-            "status": "indexed",
-        },
-    ]
 
-    conn.executemany(
-        """
-        INSERT INTO documents (
-            title, religion, tradition, language, source, source_url, category,
-            date_start, date_end, summary, status
-        ) VALUES (:title, :religion, :tradition, :language, :source, :source_url,
-            :category, :date_start, :date_end, :summary, :status)
-        """,
-        sample_documents,
-    )
-    conn.commit()
-    conn.close()
+async def fetch_url_metadata(source_url: str) -> Dict[str, Any]:
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=20.0) as client:
+            response = await client.get(source_url)
+            response.raise_for_status()
+            html = response.text
+            metadata = metadata_from_html(html, source_url)
+            metadata["source_type"] = infer_source_type(source_url)
+            return metadata
+    except Exception:
+        return {
+            "title": "Imported source",
+            "description": "",
+            "url": source_url,
+            "source_type": infer_source_type(source_url),
+        }
+
+
+def build_document_from_source(source_url: str, religion: Optional[str] = None, source_name: Optional[str] = None) -> Dict[str, Any]:
+    source_type = infer_source_type(source_url)
+    return {
+        "title": source_name or f"{source_type.title()} source",
+        "religion": religion or "Unspecified",
+        "tradition": "Imported",
+        "language": "Unknown",
+        "source": source_type,
+        "source_url": source_url,
+        "category": "Imported source",
+        "date_start": None,
+        "date_end": None,
+        "summary": "Source discovered and cataloged by the ingestion pipeline.",
+        "status": "queued",
+    }
+
+
+def serialize_metadata(metadata: Dict[str, Any]) -> str:
+    return json.dumps(metadata, ensure_ascii=False)
+

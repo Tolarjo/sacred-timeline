@@ -1,59 +1,47 @@
 # sacred-timeline
 
-A minimal MVP for a global, multi-religion, multi-history manuscript library and comparison dashboard.
+A multi-religion, multi-history manuscript library and comparative dashboard focused on global textual traditions.
 
-This starter project includes:
-- a FastAPI backend with SQLite persistence
-- a document ingestion API for metadata and source URLs
-- a searchable document library
-- a dashboard with timeline, summary stats, and source filters
+## MVP status
+
+This branch adds the next milestone:
+- PostgreSQL-ready database layer with SQLite fallback for local development
+- source ingestion endpoints for URL-driven document discovery
+- enhanced dashboard with richer metadata and filtering
+- improved document library and timeline visualization
 
 ## Stack
-- Python 3.11+
 - FastAPI
-- SQLite
-- Vanilla JS + HTML/CSS dashboard
+- PostgreSQL (or SQLite fallback)
+- HTML/CSS/JS dashboard frontend
+- Python ingestion utilities
 
-## Quick start
-
-### 1) Create a virtual environment
+## Local development
 
 ```bash
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 2) Run the backend
-
-```bash
+cp .env.example .env
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 3) Open the dashboard
-
-Open your browser to:
+Then open:
 
 ```text
 http://localhost:8000
 ```
 
-The dashboard will load document data from the API automatically.
+## API
 
-## API endpoints
-
+- `GET /health`
 - `GET /api/documents`
 - `POST /api/documents`
+- `POST /api/ingest-source`
 - `GET /api/timeline`
 - `GET /api/dashboard`
-- `GET /health`
 
 ## Notes
 
-This is intentionally a lightweight MVP focused on:
-- ingesting metadata
-- organizing documents by tradition, period, and source
-- showing a visual dashboard and document collection
-
-It is not yet a full multi-agent orchestration system; it is the foundation for that later.
+This is still a focused MVP builder for ingestion and comparison workflows. It intentionally emphasizes data acquisition and a structured library before full AI orchestration layers are added.

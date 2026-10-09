@@ -1,0 +1,267 @@
+import os
+import sqlite3
+from contextlib import contextmanager
+from typing import Iterator
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
+DB_URL = os.getenv("DATABASE_URL", "sqlite:///./data/sacred_timeline.db")
+
+
+def is_postgres() -> bool:
+    return DB_URL.startswith("postgresql") or DB_URL.startswith("postgres")
+
+
+def get_db_url() -> str:
+    return DB_URL
+
+
+def get_sqlite_path() -> str:
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    return os.path.join(base_dir, "data", "sacred_timeline.db")
+
+
+@contextmanager
+def get_connection() -> Iterator[sqlite3.Connection]:
+    if is_postgres():
+        conn = psycopg2.connect(DB_URL, cursor_factory=RealDictCursor)
+        try:
+            yield conn
+        finally:
+            conn.close()
+        return
+
+    conn = sqlite3.connect(get_sqlite_path())
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def init_db() -> None:
+    if is_postgres():
+        with psycopg2.connect(DB_URL, cursor_factory=RealDictCursor) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS documents (
+                        id SERIAL PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        religion TEXT NOT NULL,
+                        tradition TEXT,
+                        language TEXT,
+                        source TEXT,
+                        source_url TEXT,
+                        category TEXT,
+                        date_start INTEGER,
+                        date_end INTEGER,
+                        summary TEXT,
+                        status TEXT DEFAULT 'ingested',
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                    """
+                )
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS sources (
+                        id SERIAL PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        url TEXT NOT NULL,
+                        religion TEXT,
+                        source_type TEXT,
+                        metadata JSONB,
+                        status TEXT DEFAULT 'queued',
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    )
+                    """
+                )
+                conn.commit()
+        return
+
+    os.makedirs(os.path.dirname(get_sqlite_path()), exist_ok=True)
+    conn = sqlite3.connect(get_sqlite_path())
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            religion TEXT NOT NULL,
+            tradition TEXT,
+            language TEXT,
+            source TEXT,
+            source_url TEXT,
+            category TEXT,
+            date_start INTEGER,
+            date_end INTEGER,
+            summary TEXT,
+            status TEXT DEFAULT 'ingested',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sources (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            url TEXT NOT NULL,
+            religion TEXT,
+            source_type TEXT,
+            metadata TEXT,
+            status TEXT DEFAULT 'queued',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def seed_documents() -> None:
+    if is_postgres():
+        with psycopg2.connect(DB_URL, cursor_factory=RealDictCursor) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) AS count FROM documents")
+                if cur.fetchone()["count"] > 0:
+                    return
+                sample_documents = [
+                    {
+                        "title": "Rigveda, Book 10",
+                        "religion": "Hinduism",
+                        "tradition": "Vedic",
+                        "language": "Sanskrit",
+                        "source": "Internet Archive",
+                        "source_url": "https://example.org/rigveda-book-10",
+                        "category": "Scripture",
+                        "date_start": -1200,
+                        "date_end": -900,
+                        "summary": "Early Vedic hymn collection preserving ritual and cosmological themes.",
+                        "status": "downloaded",
+                    },
+                    {
+                        "title": "Torah: Genesis",
+                        "religion": "Judaism",
+                        "tradition": "Hebrew Bible",
+                        "language": "Hebrew",
+                        "source": "Sefaria",
+                        "source_url": "https://example.org/torah-genesis",
+                        "category": "Canonical text",
+                        "date_start": -1000,
+                        "date_end": -400,
+                        "summary": "Foundational narrative of creation, covenant, and early ancestral history.",
+                        "status": "downloaded",
+                    },
+                    {
+                        "title": "Gospel of Matthew",
+                        "religion": "Christianity",
+                        "tradition": "Synoptic",
+                        "language": "Greek",
+                        "source": "Patristic Archive",
+                        "source_url": "https://example.org/gospel-of-matthew",
+                        "category": "Canonical text",
+                        "date_start": 50,
+                        "date_end": 110,
+                        "summary": "Narrative of Jesus focusing on teaching, fulfillment, and kingdom themes.",
+                        "status": "downloaded",
+                    },
+                    {
+                        "title": "Quran, Surah 1-10",
+                        "religion": "Islam",
+                        "tradition": "Quranic",
+                        "language": "Arabic",
+                        "source": "OpenITI",
+                        "source_url": "https://example.org/quran-surah-1-10",
+                        "category": "Canonical text",
+                        "date_start": 610,
+                        "date_end": 632,
+                        "summary": "Early revelation units forming the opening surahs.",
+                        "status": "downloaded",
+                    },
+                ]
+                for item in sample_documents:
+                    cur.execute(
+                        """
+                        INSERT INTO documents (title, religion, tradition, language, source, source_url, category, date_start, date_end, summary, status)
+                        VALUES (%(title)s, %(religion)s, %(tradition)s, %(language)s, %(source)s, %(source_url)s, %(category)s, %(date_start)s, %(date_end)s, %(summary)s, %(status)s)
+                        """,
+                        item,
+                    )
+                conn.commit()
+        return
+
+    conn = sqlite3.connect(get_sqlite_path())
+    conn.row_factory = sqlite3.Row
+    existing = conn.execute("SELECT COUNT(*) AS count FROM documents").fetchone()["count"]
+    if existing > 0:
+        conn.close()
+        return
+
+    sample_documents = [
+        {
+            "title": "Rigveda, Book 10",
+            "religion": "Hinduism",
+            "tradition": "Vedic",
+            "language": "Sanskrit",
+            "source": "Internet Archive",
+            "source_url": "https://example.org/rigveda-book-10",
+            "category": "Scripture",
+            "date_start": -1200,
+            "date_end": -900,
+            "summary": "Early Vedic hymn collection preserving ritual and cosmological themes.",
+            "status": "downloaded",
+        },
+        {
+            "title": "Torah: Genesis",
+            "religion": "Judaism",
+            "tradition": "Hebrew Bible",
+            "language": "Hebrew",
+            "source": "Sefaria",
+            "source_url": "https://example.org/torah-genesis",
+            "category": "Canonical text",
+            "date_start": -1000,
+            "date_end": -400,
+            "summary": "Foundational narrative of creation, covenant, and early ancestral history.",
+            "status": "downloaded",
+        },
+        {
+            "title": "Gospel of Matthew",
+            "religion": "Christianity",
+            "tradition": "Synoptic",
+            "language": "Greek",
+            "source": "Patristic Archive",
+            "source_url": "https://example.org/gospel-of-matthew",
+            "category": "Canonical text",
+            "date_start": 50,
+            "date_end": 110,
+            "summary": "Narrative of Jesus focusing on teaching, fulfillment, and kingdom themes.",
+            "status": "downloaded",
+        },
+        {
+            "title": "Quran, Surah 1-10",
+            "religion": "Islam",
+            "tradition": "Quranic",
+            "language": "Arabic",
+            "source": "OpenITI",
+            "source_url": "https://example.org/quran-surah-1-10",
+            "category": "Canonical text",
+            "date_start": 610,
+            "date_end": 632,
+            "summary": "Early revelation units forming the opening surahs.",
+            "status": "downloaded",
+        },
+    ]
+    conn.executemany(
+        """
+        INSERT INTO documents (
+            title, religion, tradition, language, source, source_url, category,
+            date_start, date_end, summary, status
+        ) VALUES (:title, :religion, :tradition, :language, :source, :source_url,
+            :category, :date_start, :date_end, :summary, :status)
+        """,
+        sample_documents,
+    )
+    conn.commit()
+    conn.close()
+

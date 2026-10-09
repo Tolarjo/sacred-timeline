@@ -1,0 +1,144 @@
+const apiBase = '/api';
+
+function formatRange(row) {
+  const start = row.date_start ?? 'n/a';
+  const end = row.date_end ?? 'n/a';
+  return `${start}–${end}`;
+}
+
+function renderStats(stats) {
+  document.getElementById('totalDocuments').textContent = stats.total_documents;
+  document.getElementById('totalReligions').textContent = stats.religions;
+  document.getElementById('totalTraditions').textContent = stats.traditions;
+  document.getElementById('timelineSpan').textContent = `${stats.earliest_year}–${stats.latest_year}`;
+}
+
+function renderBreakdown(breakdown) {
+  const container = document.getElementById('religionBreakdown');
+  const colors = ['#34d399', '#60a5fa', '#fbbf24', '#f472b6', '#f87171', '#a78bfa'];
+  container.innerHTML = breakdown
+    .map(
+      (item, index) => `
+        <div class="breakdown-row">
+          <div class="breakdown-label">
+            <span class="dot" style="background:${colors[index % colors.length]}"></span>
+            <span>${item.religion}</span>
+          </div>
+          <strong>${item.count}</strong>
+        </div>
+      `
+    )
+    .join('');
+}
+
+function renderTimeline(items) {
+  const container = document.getElementById('timeline');
+  const fullItems = items.slice(0, 8);
+  const maxSpread = Math.max(
+    1,
+    ...fullItems.map((item) => Math.max(1, Math.abs((item.date_end || item.date_start || 0) - (item.date_start || item.date_end || 0)) || 20))
+  );
+
+  container.innerHTML = fullItems
+    .map((item) => {
+      const start = item.date_start ?? 0;
+      const end = item.date_end ?? start;
+      const spread = Math.max(20, Math.abs(end - start) || 20);
+      const height = Math.min(180, (spread / maxSpread) * 160 + 30);
+      return `
+        <div class="timeline-item">
+          <div class="timeline-bar" style="height:${height}px"></div>
+          <small>${item.title.length > 18 ? item.title.substring(0, 18) + '…' : item.title}</small>
+        </div>
+      `;
+    })
+    .join('');
+}
+
+function renderDocuments(documents) {
+  const searchInput = document.getElementById('searchInput');
+  const searchTerm = searchInput.value.toLowerCase();
+  const filtered = documents.filter((doc) => {
+    const haystack = [doc.title, doc.religion, doc.tradition, doc.language, doc.source, doc.summary]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(searchTerm);
+  });
+
+  const list = document.getElementById('documentList');
+  list.innerHTML = filtered
+    .map(
+      (doc) => `
+        <article class="document-card">
+          <div class="meta">
+            <span class="badge">${doc.religion}</span>
+            <span class="badge">${doc.language || 'Unspecified'}</span>
+            <span class="badge">${doc.status || 'ingested'}</span>
+          </div>
+          <h3>${doc.title}</h3>
+          <p><strong>${formatRange(doc)}</strong></p>
+          <p>${doc.summary || 'No summary available yet.'}</p>
+          <p><em>${doc.source || 'Unknown source'}</em></p>
+        </article>
+      `
+    )
+    .join('');
+}
+
+async function loadDashboard() {
+  const response = await fetch(`${apiBase}/dashboard`);
+  const data = await response.json();
+  renderStats(data.stats);
+  renderBreakdown(data.religion_breakdown);
+  renderTimeline(data.documents);
+  renderDocuments(data.documents);
+}
+
+async function submitSource(event) {
+  event.preventDefault();
+  const form = event.target;
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+
+  const response = await fetch(`${apiBase}/ingest-source`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (response.ok) {
+    form.reset();
+    await loadDashboard();
+  }
+}
+
+async function submitDocument(event) {
+  event.preventDefault();
+  const form = event.target;
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+
+  const response = await fetch(`${apiBase}/documents`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (response.ok) {
+    form.reset();
+    await loadDashboard();
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', loadDashboard);
+document.getElementById('searchInput').addEventListener('input', async () => {
+  const response = await fetch(`${apiBase}/dashboard`);
+  const data = await response.json();
+  renderDocuments(data.documents);
+});
+document.getElementById('sourceForm').addEventListener('submit', submitSource);
+document.getElementById('documentForm').addEventListener('submit', submitDocument);
+
+loadDashboard();
+
