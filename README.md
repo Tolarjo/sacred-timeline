@@ -1,47 +1,46 @@
-# sacred-timeline
+version: '3.8'
 
-A multi-religion, multi-history manuscript library and comparative dashboard focused on global textual traditions.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: sacred_timeline
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
-## MVP status
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
 
-This branch adds the next milestone:
-- PostgreSQL-ready database layer with SQLite fallback for local development
-- source ingestion endpoints for URL-driven document discovery
-- enhanced dashboard with richer metadata and filtering
-- improved document library and timeline visualization
+  backend:
+    build: ./backend
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/sacred_timeline
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
 
-## Stack
-- FastAPI
-- PostgreSQL (or SQLite fallback)
-- HTML/CSS/JS dashboard frontend
-- Python ingestion utilities
+  celery_worker:
+    build: ./backend
+    command: celery -A app.tasks worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/sacred_timeline
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
 
-## Local development
+volumes:
+  postgres_data:
 
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Then open:
-
-```text
-http://localhost:8000
-```
-
-## API
-
-- `GET /health`
-- `GET /api/documents`
-- `POST /api/documents`
-- `POST /api/ingest-source`
-- `GET /api/timeline`
-- `GET /api/dashboard`
-
-## Notes
-
-This is still a focused MVP builder for ingestion and comparison workflows. It intentionally emphasizes data acquisition and a structured library before full AI orchestration layers are added.
