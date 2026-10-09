@@ -24,7 +24,7 @@ html, body {
   font-family: Inter, Arial, sans-serif;
 }
 
-button, input, textarea {
+button, input, textarea, select {
   font: inherit;
 }
 
@@ -103,6 +103,10 @@ button {
   grid-template-columns: 2fr 1fr;
   gap: 20px;
   margin-bottom: 20px;
+}
+
+.details-grid {
+  grid-template-columns: 1.3fr 1fr;
 }
 
 .panel {
@@ -184,9 +188,16 @@ button {
   gap: 12px;
 }
 
-.section-header input {
+.library-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 520px);
+}
+
+.library-filters select,
+.library-filters input {
   flex: 1;
-  max-width: 420px;
 }
 
 .document-list {
@@ -200,6 +211,18 @@ button {
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 18px;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.document-card.selected {
+  border-color: rgba(59, 130, 246, 0.8);
+  transform: translateY(-1px);
+}
+
+.document-card button {
+  margin-top: 12px;
+  font-size: 12px;
+  padding: 8px 12px;
 }
 
 .meta {
@@ -228,6 +251,38 @@ button {
   line-height: 1.5;
 }
 
+.selected-document,
+.comparison-panel,
+.empty-state {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.detail-card,
+.compare-box {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.compare-box h4 {
+  margin: 0 0 10px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -235,7 +290,7 @@ button {
   margin-bottom: 16px;
 }
 
-input, textarea {
+input, textarea, select {
   width: 100%;
   padding: 10px 12px;
   border-radius: 10px;
@@ -255,13 +310,16 @@ textarea {
 
 @media (max-width: 768px) {
   .topbar,
-  .section-header {
+  .section-header,
+  .library-filters {
     flex-direction: column;
     align-items: flex-start;
   }
 
   .stats-panel,
-  .content-grid {
+  .content-grid,
+  .compare-grid,
+  .details-grid {
     grid-template-columns: 1fr;
   }
 }

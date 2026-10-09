@@ -53,12 +53,37 @@
         </div>
       </section>
 
-      <section class="library panel">
+      <section class="panel library-panel">
         <div class="section-header">
           <h2>Document library</h2>
-          <input id="searchInput" type="text" placeholder="Search title, religion, language..." />
+          <div class="library-filters">
+            <select id="religionFilter">
+              <option value="">All religions</option>
+            </select>
+            <input id="searchInput" type="text" placeholder="Search title, religion, language..." />
+          </div>
         </div>
         <div id="documentList" class="document-list"></div>
+      </section>
+
+      <section class="content-grid details-grid">
+        <div class="panel detail-panel">
+          <div class="panel-heading">
+            <h2>Selected document</h2>
+          </div>
+          <div id="selectedDocument" class="selected-document empty-state">
+            Select a document to inspect its metadata and chronology.
+          </div>
+        </div>
+
+        <div class="panel compare-panel">
+          <div class="panel-heading">
+            <h2>Compare</h2>
+          </div>
+          <div id="comparisonPanel" class="comparison-panel empty-state">
+            Select two documents from the library to compare them side-by-side.
+          </div>
+        </div>
       </section>
 
       <section class="panel form-panel">

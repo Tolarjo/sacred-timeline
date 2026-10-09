@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -54,17 +54,61 @@ def health_check() -> Dict[str, str]:
 @app.get("/api/documents")
 def get_documents() -> List[Dict[str, Any]]:
     with get_connection() as conn:
-        cursor = conn.execute(
-            "SELECT * FROM documents ORDER BY COALESCE(date_start, 0) ASC, title ASC"
-        ) if hasattr(conn, "execute") else conn.cursor()
         if hasattr(conn, "execute"):
-            rows = cursor.fetchall()
-        else:
-            cursor.execute("SELECT * FROM documents ORDER BY COALESCE(date_start, 0) ASC, title ASC")
-            rows = cursor.fetchall()
-    if isinstance(rows, list):
-        return [dict(row) for row in rows]
-    return [dict(row) for row in rows]
+            rows = conn.execute(
+                "SELECT * FROM documents ORDER BY COALESCE(date_start, 0) ASC, title ASC"
+            ).fetchall()
+            return [dict(row) for row in rows]
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM documents ORDER BY COALESCE(date_start, 0) ASC, title ASC")
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
+
+
+@app.get("/api/documents/{document_id}")
+def get_document(document_id: int) -> Dict[str, Any]:
+    with get_connection() as conn:
+        if hasattr(conn, "execute"):
+            row = conn.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Document not found")
+            return dict(row)
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM documents WHERE id = %s", (document_id,))
+            row = cur.fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Document not found")
+            return dict(row)
+
+
+@app.get("/api/compare")
+def compare_documents(ids: str) -> Dict[str, Any]:
+    document_ids = [int(part.strip()) for part in ids.split(",") if part.strip()]
+    if len(document_ids) < 2:
+        raise HTTPException(status_code=400, detail="Provide at least two document IDs")
+
+    docs = []
+    for document_id in document_ids[:2]:
+        docs.append(get_document(document_id))
+
+    left, right = docs
+    comparable = {
+        "shared_religion": left.get("religion") == right.get("religion"),
+        "same_language": left.get("language") == right.get("language"),
+        "same_tradition": left.get("tradition") == right.get("tradition"),
+        "date_overlap": (
+            left.get("date_start") is not None
+            and right.get("date_end") is not None
+            and left.get("date_start") <= right.get("date_end")
+            and right.get("date_start") <= left.get("date_end")
+        ),
+        "left_title": left.get("title"),
+        "right_title": right.get("title"),
+        "left_summary": left.get("summary"),
+        "right_summary": right.get("summary"),
+    }
+
+    return {"documents": docs, "comparison": comparable}
 
 
 @app.post("/api/documents")
@@ -225,13 +269,13 @@ def get_timeline() -> List[Dict[str, Any]]:
             rows = conn.execute(
                 "SELECT * FROM documents WHERE date_start IS NOT NULL OR date_end IS NOT NULL ORDER BY COALESCE(date_start, 0) ASC"
             ).fetchall()
-        else:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT * FROM documents WHERE date_start IS NOT NULL OR date_end IS NOT NULL ORDER BY COALESCE(date_start, 0) ASC"
-                )
-                rows = cur.fetchall()
-    return [dict(row) for row in rows]
+            return [dict(row) for row in rows]
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM documents WHERE date_start IS NOT NULL OR date_end IS NOT NULL ORDER BY COALESCE(date_start, 0) ASC"
+            )
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
 
 
 @app.get("/api/dashboard")
@@ -239,12 +283,13 @@ def dashboard_data() -> Dict[str, Any]:
     with get_connection() as conn:
         if hasattr(conn, "execute"):
             documents = conn.execute("SELECT * FROM documents ORDER BY COALESCE(date_start, 0) ASC, title ASC").fetchall()
+            docs = [dict(row) for row in documents]
         else:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM documents ORDER BY COALESCE(date_start, 0) ASC, title ASC")
                 documents = cur.fetchall()
+                docs = [dict(row) for row in documents]
 
-    docs = [dict(row) for row in documents]
     religions = sorted({doc["religion"] for doc in docs})
     statuses = sorted({doc["status"] for doc in docs})
     min_year = min((doc["date_start"] for doc in docs if doc.get("date_start") is not None), default=0)

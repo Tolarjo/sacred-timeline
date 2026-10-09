@@ -1,9 +1,26 @@
 const apiBase = '/api';
+const state = {
+  documents: [],
+  selectedId: null,
+  comparisonIds: [],
+};
 
 function formatRange(row) {
   const start = row.date_start ?? 'n/a';
   const end = row.date_end ?? 'n/a';
   return `${start}–${end}`;
+}
+
+function populateReligionFilter(documents) {
+  const select = document.getElementById('religionFilter');
+  const religions = [...new Set(documents.map((doc) => doc.religion).filter(Boolean))].sort();
+  const current = select.value;
+  select.innerHTML = '<option value="">All religions</option>' + religions
+    .map((religion) => `<option value="${religion}">${religion}</option>`)
+    .join('');
+  if (religions.includes(current)) {
+    select.value = current;
+  }
 }
 
 function renderStats(stats) {
@@ -55,22 +72,28 @@ function renderTimeline(items) {
     .join('');
 }
 
-function renderDocuments(documents) {
-  const searchInput = document.getElementById('searchInput');
-  const searchTerm = searchInput.value.toLowerCase();
-  const filtered = documents.filter((doc) => {
+function getFilteredDocuments() {
+  const religionFilter = document.getElementById('religionFilter').value;
+  const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
+
+  return state.documents.filter((doc) => {
+    const matchesReligion = !religionFilter || doc.religion === religionFilter;
     const haystack = [doc.title, doc.religion, doc.tradition, doc.language, doc.source, doc.summary]
       .filter(Boolean)
       .join(' ')
       .toLowerCase();
-    return haystack.includes(searchTerm);
+    const matchesSearch = !searchTerm || haystack.includes(searchTerm);
+    return matchesReligion && matchesSearch;
   });
+}
 
+function renderDocuments() {
+  const filtered = getFilteredDocuments();
   const list = document.getElementById('documentList');
   list.innerHTML = filtered
     .map(
       (doc) => `
-        <article class="document-card">
+        <article class="document-card ${doc.id === state.selectedId ? 'selected' : ''}">
           <div class="meta">
             <span class="badge">${doc.religion}</span>
             <span class="badge">${doc.language || 'Unspecified'}</span>
@@ -80,26 +103,120 @@ function renderDocuments(documents) {
           <p><strong>${formatRange(doc)}</strong></p>
           <p>${doc.summary || 'No summary available yet.'}</p>
           <p><em>${doc.source || 'Unknown source'}</em></p>
+          <div class="meta">
+            <button data-action="view" data-id="${doc.id}">View</button>
+            <button data-action="compare" data-id="${doc.id}">Compare</button>
+          </div>
         </article>
       `
     )
     .join('');
+
+  if (!filtered.some((doc) => doc.id === state.selectedId) && filtered.length) {
+    state.selectedId = filtered[0].id;
+  }
+
+  renderSelectedDocument();
+  renderComparison();
+}
+
+async function renderSelectedDocument() {
+  const container = document.getElementById('selectedDocument');
+  if (!state.selectedId) {
+    container.classList.add('empty-state');
+    container.textContent = 'Select a document to inspect its metadata and chronology.';
+    return;
+  }
+
+  const doc = state.documents.find((item) => item.id === state.selectedId);
+  if (!doc) {
+    return;
+  }
+
+  container.classList.remove('empty-state');
+  container.innerHTML = `
+    <div class="detail-card">
+      <h3>${doc.title}</h3>
+      <p><strong>${doc.religion}</strong> · ${doc.tradition || 'Unspecified tradition'} · ${doc.language || 'Unknown language'}</p>
+      <p>${doc.summary || 'No summary available yet.'}</p>
+      <div class="detail-grid">
+        <div><strong>Source</strong><br />${doc.source || 'Unknown'}</div>
+        <div><strong>URL</strong><br /><a href="${doc.source_url || '#'}" target="_blank" rel="noreferrer">${doc.source_url || 'Not provided'}</a></div>
+        <div><strong>Date range</strong><br />${formatRange(doc)}</div>
+        <div><strong>Status</strong><br />${doc.status || 'ingested'}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderComparison() {
+  const container = document.getElementById('comparisonPanel');
+  if (state.comparisonIds.length < 2) {
+    container.classList.add('empty-state');
+    container.textContent = 'Select two documents from the library to compare them side-by-side.';
+    return;
+  }
+
+  const docs = state.comparisonIds
+    .map((id) => state.documents.find((doc) => doc.id === id))
+    .filter(Boolean);
+
+  if (docs.length < 2) {
+    container.textContent = 'Need two valid documents to compare.';
+    return;
+  }
+
+  const [left, right] = docs;
+  const comparison = {
+    sharedReligion: left.religion === right.religion,
+    sameLanguage: left.language === right.language,
+    sameTradition: left.tradition === right.tradition,
+    dateOverlap: left.date_start != null && right.date_end != null && left.date_start <= right.date_end && right.date_start <= left.date_end,
+  };
+
+  container.classList.remove('empty-state');
+  container.innerHTML = `
+    <div class="compare-grid">
+      <div class="compare-box">
+        <h4>${left.title}</h4>
+        <p>${left.summary || 'No summary available.'}</p>
+      </div>
+      <div class="compare-box">
+        <h4>${right.title}</h4>
+        <p>${right.summary || 'No summary available.'}</p>
+      </div>
+    </div>
+    <div class="detail-grid" style="margin-top: 16px;">
+      <div><strong>Same religion</strong><br />${comparison.sharedReligion ? 'Yes' : 'No'}</div>
+      <div><strong>Same language</strong><br />${comparison.sameLanguage ? 'Yes' : 'No'}</div>
+      <div><strong>Same tradition</strong><br />${comparison.sameTradition ? 'Yes' : 'No'}</div>
+      <div><strong>Date overlap</strong><br />${comparison.dateOverlap ? 'Yes' : 'No'}</div>
+    </div>
+  `;
 }
 
 async function loadDashboard() {
   const response = await fetch(`${apiBase}/dashboard`);
   const data = await response.json();
+  state.documents = data.documents;
+  if (!state.selectedId && state.documents.length) {
+    state.selectedId = state.documents[0].id;
+  }
+  if (state.comparisonIds.length < 2 && state.documents.length >= 2) {
+    state.comparisonIds = state.documents.slice(0, 2).map((doc) => doc.id);
+  }
+
   renderStats(data.stats);
   renderBreakdown(data.religion_breakdown);
   renderTimeline(data.documents);
-  renderDocuments(data.documents);
+  populateReligionFilter(data.documents);
+  renderDocuments();
 }
 
 async function submitSource(event) {
   event.preventDefault();
   const form = event.target;
-  const formData = new FormData(form);
-  const payload = Object.fromEntries(formData.entries());
+  const payload = Object.fromEntries(new FormData(form).entries());
 
   const response = await fetch(`${apiBase}/ingest-source`, {
     method: 'POST',
@@ -116,8 +233,7 @@ async function submitSource(event) {
 async function submitDocument(event) {
   event.preventDefault();
   const form = event.target;
-  const formData = new FormData(form);
-  const payload = Object.fromEntries(formData.entries());
+  const payload = Object.fromEntries(new FormData(form).entries());
 
   const response = await fetch(`${apiBase}/documents`, {
     method: 'POST',
@@ -132,11 +248,28 @@ async function submitDocument(event) {
 }
 
 document.getElementById('refreshBtn').addEventListener('click', loadDashboard);
-document.getElementById('searchInput').addEventListener('input', async () => {
-  const response = await fetch(`${apiBase}/dashboard`);
-  const data = await response.json();
-  renderDocuments(data.documents);
+document.getElementById('searchInput').addEventListener('input', renderDocuments);
+document.getElementById('religionFilter').addEventListener('change', renderDocuments);
+
+document.getElementById('documentList').addEventListener('click', (event) => {
+  const button = event.target.closest('button');
+  if (!button) return;
+  const id = Number(button.dataset.id);
+  const action = button.dataset.action;
+
+  if (action === 'view') {
+    state.selectedId = id;
+    renderDocuments();
+  }
+
+  if (action === 'compare') {
+    if (!state.comparisonIds.includes(id)) {
+      state.comparisonIds = [...state.comparisonIds, id].slice(-2);
+    }
+    renderComparison();
+  }
 });
+
 document.getElementById('sourceForm').addEventListener('submit', submitSource);
 document.getElementById('documentForm').addEventListener('submit', submitDocument);
 
