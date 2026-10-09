@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sacred Timeline</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Global manuscript library</p>
+        <h1>Sacred Timeline MVP</h1>
+      </div>
+      <button id="refreshBtn">Refresh data</button>
+    </header>
+
+    <main class="layout">
+      <section class="stats-panel">
+        <div class="stat-card">
+          <span>Documents</span>
+          <strong id="totalDocuments">0</strong>
+        </div>
+        <div class="stat-card">
+          <span>Religions</span>
+          <strong id="totalReligions">0</strong>
+        </div>
+        <div class="stat-card">
+          <span>Traditions</span>
+          <strong id="totalTraditions">0</strong>
+        </div>
+        <div class="stat-card">
+          <span>Timeline span</span>
+          <strong id="timelineSpan">0</strong>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <div class="panel">
+          <h2>Timeline</h2>
+          <div id="timeline" class="timeline"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Religion breakdown</h2>
+          <div id="religionBreakdown" class="breakdown-list"></div>
+        </div>
+      </section>
+
+      <section class="library panel">
+        <div class="section-header">
+          <h2>Document library</h2>
+          <input id="searchInput" type="text" placeholder="Search title, religion, language..." />
+        </div>
+        <div id="documentList" class="document-list"></div>
+      </section>
+
+      <section class="panel form-panel">
+        <h2>Add a document</h2>
+        <form id="documentForm">
+          <div class="form-grid">
+            <input name="title" placeholder="Document title" required />
+            <input name="religion" placeholder="Religion" required />
+            <input name="tradition" placeholder="Tradition" />
+            <input name="language" placeholder="Language" />
+            <input name="source" placeholder="Source" />
+            <input name="source_url" placeholder="Source URL" />
+            <input name="category" placeholder="Category" />
+            <input name="date_start" type="number" placeholder="Start year" />
+            <input name="date_end" type="number" placeholder="End year" />
+            <input name="status" placeholder="Status" value="ingested" />
+            <textarea name="summary" rows="3" placeholder="Summary"></textarea>
+          </div>
+          <button type="submit">Save document</button>
+        </form>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
